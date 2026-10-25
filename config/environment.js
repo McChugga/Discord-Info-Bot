@@ -1,28 +1,23 @@
-CREATE TABLE IF NOT EXISTS schema_migrations (
-  version VARCHAR(255) PRIMARY KEY,
-  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+function readDatabaseEnvironment(env = process.env) {
+  if (!env.DATABASE_URL) throw new Error("Missing required environment variable: DATABASE_URL");
+  return { databaseUrl: env.DATABASE_URL, pgSslMode: env.PGSSLMODE };
+}
 
-CREATE TABLE IF NOT EXISTS guild_config (
-  guild_id VARCHAR(50) PRIMARY KEY,
-  guild_name TEXT,
-  description TEXT,
-  welcome_message TEXT,
-  rules_channel_id VARCHAR(50),
-  info_channel_id VARCHAR(50),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+function readEnvironment(env = process.env) {
+  const config = {
+    ...readDatabaseEnvironment(env),
+    discordToken: env.DISCORD_TOKEN,
+    port: Number(env.PORT || 3000)
+  };
+  const missing = [];
+  if (!config.discordToken) missing.push("DISCORD_TOKEN");
+  if (missing.length) {
+    throw new Error(`Missing required environment variable(s): ${missing.join(", ")}`);
+  }
+  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
+    throw new Error("PORT must be a valid TCP port between 1 and 65535.");
+  }
+  return config;
+}
 
-CREATE TABLE IF NOT EXISTS guild_knowledge (
-  id BIGSERIAL PRIMARY KEY,
-  guild_id VARCHAR(50) NOT NULL,
-  title VARCHAR(120) NOT NULL,
-  content TEXT NOT NULL,
-  created_by_discord_id VARCHAR(50),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (guild_id, title)
-);
-
-CREATE INDEX IF NOT EXISTS guild_knowledge_guild_idx ON guild_knowledge (guild_id);
+module.exports = { readEnvironment, readDatabaseEnvironment };
