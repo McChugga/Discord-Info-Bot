@@ -1,7 +1,7 @@
 {
   "name": "guild-guide-bot",
   "version": "1.0.0",
-  "description": "Guild Guide Discord bot with contract management and server knowledge.",
+  "description": "Guild Guide Discord bot for server information and searchable knowledge.",
   "main": "bot/index.js",
   "scripts": {
     "start": "node bot/index.js",
