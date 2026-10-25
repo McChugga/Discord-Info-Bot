@@ -1,4 +1,5 @@
 const repository = require("../database/repositories/knowledgeRepository");
+const { extractSearchTerms, scoreText } = require("./queryUtils");
 
 function validateText(value, name, maxLength) {
   const clean = String(value || "").trim();
@@ -21,6 +22,38 @@ module.exports = {
       repository.searchMessages(guildId, cleanQuery, visibleChannelIds)
     ]);
     return { entries, messages };
+  },
+  async answerQuestion(guildId, question, visibleChannelIds = []) {
+    const cleanQuestion = validateText(question, "Question", 200);
+    const terms = extractSearchTerms(cleanQuestion);
+    const searches = terms.length ? terms.slice(0, 5) : [cleanQuestion];
+    const results = await Promise.all(searches.map(async term => {
+      const [entries, messages] = await Promise.all([
+        repository.search(guildId, term),
+        repository.searchMessages(guildId, term, visibleChannelIds)
+      ]);
+      return { entries, messages };
+    }));
+
+    const entries = new Map();
+    const messages = new Map();
+    for (const result of results) {
+      for (const entry of result.entries) {
+        const previous = entries.get(entry.id);
+        const score = scoreText(`${entry.title} ${entry.content}`, terms) + scoreText(entry.title, terms);
+        if (!previous || score > previous.score) entries.set(entry.id, { ...entry, score });
+      }
+      for (const message of result.messages) {
+        const previous = messages.get(message.message_id);
+        const score = scoreText(message.content, terms);
+        if (!previous || score > previous.score) messages.set(message.message_id, { ...message, score });
+      }
+    }
+    return {
+      terms,
+      entries: [...entries.values()].sort((a, b) => b.score - a.score).slice(0, 4),
+      messages: [...messages.values()].sort((a, b) => b.score - a.score || new Date(b.message_created_at) - new Date(a.message_created_at)).slice(0, 4)
+    };
   },
   getIndexingEnabled(guildId) {
     return repository.getIndexingEnabled(guildId);
