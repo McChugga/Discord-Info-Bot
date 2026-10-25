@@ -9,9 +9,9 @@ const data = new SlashCommandBuilder()
   .addSubcommand(sub => sub.setName("set-welcome").setDescription("Set the server welcome text (Manage Server required).")
     .addStringOption(option => option.setName("text").setDescription("Welcome information for members").setRequired(true).setMaxLength(2000)))
   .addSubcommand(sub => sub.setName("set-rules-channel").setDescription("Choose the server's rules channel (Manage Server required).")
-    .addChannelOption(option => option.setName("channel").setDescription("Rules channel").addChannelTypes(ChannelType.GuildText).setRequired(true)))
+    .addChannelOption(option => option.setName("channel").setDescription("Rules channel").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum).setRequired(true)))
   .addSubcommand(sub => sub.setName("set-info-channel").setDescription("Choose the server's information channel (Manage Server required).")
-    .addChannelOption(option => option.setName("channel").setDescription("Information channel").addChannelTypes(ChannelType.GuildText).setRequired(true)));
+    .addChannelOption(option => option.setName("channel").setDescription("Information channel").addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum).setRequired(true)));
 
 async function execute(interaction) {
   if (!interaction.inGuild()) {
