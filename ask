@@ -1,0 +1,92 @@
+const { ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require("discord.js");
+const { extractSearchTerms } = require("../services/queryUtils");
+
+const searchableChannelTypes = new Set([
+  ChannelType.GuildText,
+  ChannelType.GuildAnnouncement,
+  ChannelType.GuildForum
+]);
+
+const data = new SlashCommandBuilder()
+  .setName("ask")
+  .setDescription("Ask Guild Guide about this server and find relevant channels.")
+  .addStringOption(option => option
+    .setName("question")
+    .setDescription("What do you want to know?")
+    .setRequired(true)
+    .setMaxLength(200));
+
+function findChannels(channels, member, config, terms) {
+  const matches = new Map();
+  for (const channel of channels.values()) {
+    if (!searchableChannelTypes.has(channel.type) || !channel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) continue;
+    const name = channel.name.toLowerCase();
+    const topic = (channel.topic || "").toLowerCase();
+    const parent = (channel.parent?.name || "").toLowerCase();
+    const score = terms.reduce((total, term) => total + (name.includes(term) ? 3 : 0) + (topic.includes(term) ? 2 : 0) + (parent.includes(term) ? 1 : 0), 0);
+    if (score > 0) matches.set(channel.id, { channel, score });
+  }
+
+  const questionHas = (...words) => words.some(word => terms.some(term => term === word || term.startsWith(word)));
+  if (questionHas("rule", "regulation", "policy") && config?.rules_channel_id) {
+    const channel = channels.get(config.rules_channel_id);
+    if (channel && channel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) matches.set(channel.id, { channel, score: 100 });
+  }
+  if (questionHas("info", "information", "welcome", "start", "newcomer") && config?.info_channel_id) {
+    const channel = channels.get(config.info_channel_id);
+    if (channel && channel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel)) matches.set(channel.id, { channel, score: 100 });
+  }
+  return [...matches.values()].sort((a, b) => b.score - a.score || a.channel.rawPosition - b.channel.rawPosition).slice(0, 5).map(item => item.channel);
+}
+
+function shorten(text, limit = 700) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  return clean.length > limit ? `${clean.slice(0, limit - 1)}…` : clean;
+}
+
+async function execute(interaction) {
+  if (!interaction.inGuild()) return interaction.reply({ content: "Use `/ask` inside a server so I can look up that server's information.", ephemeral: true });
+
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    const question = interaction.options.getString("question", true).trim();
+    const channels = await interaction.guild.channels.fetch().catch(() => interaction.guild.channels.cache);
+    const visibleChannels = [...channels.values()].filter(channel =>
+      searchableChannelTypes.has(channel.type) && channel.permissionsFor(interaction.member)?.has(PermissionFlagsBits.ViewChannel)
+    );
+    const visibleChannelIds = visibleChannels.map(channel => channel.id);
+    const [answer, config] = await Promise.all([
+      interaction.client.services.knowledge.answerQuestion(interaction.guildId, question, visibleChannelIds),
+      interaction.client.services.guild.getConfig(interaction.guildId)
+    ]);
+    const channelSuggestions = findChannels(channels, interaction.member, config, answer.terms);
+    const parts = [];
+
+    const terms = answer.terms;
+    if (config?.description && terms.some(term => ["server", "community", "about", "purpose"].some(word => term.startsWith(word)))) {
+      parts.push(`**About this server**\n${shorten(config.description)}`);
+    }
+    if (config?.welcome_message && terms.some(term => ["welcome", "start", "newcomer", "begin", "join"].some(word => term.startsWith(word)))) {
+      parts.push(`**Welcome information**\n${shorten(config.welcome_message)}`);
+    }
+    if (answer.entries.length) {
+      parts.push(`**Saved answers**\n${answer.entries.map(entry => `• **${shorten(entry.title, 100)}** — ${shorten(entry.content, 500)}`).join("\n")}`);
+    }
+    if (answer.messages.length) {
+      parts.push(`**Recent matching messages**\n${answer.messages.map(message => `• <#${message.channel_id}> — ${shorten(message.content, 320)}`).join("\n")}`);
+    }
+    if (channelSuggestions.length) {
+      parts.push(`**Related channels**\n${channelSuggestions.map(channel => `• <#${channel.id}>`).join("\n")}`);
+    }
+    if (!parts.length) {
+      parts.push("I couldn't find a matching saved answer or recent message. Try different words, or ask a server moderator to add the information with `/knowledge add`.");
+    }
+    parts.push("I search saved server information and recent messages Guild Guide can read. Message indexing must be enabled by a server manager; older messages aren't imported.");
+    return interaction.editReply({ content: parts.join("\n\n").slice(0, 1950), allowedMentions: { parse: [] } });
+  } catch (error) {
+    console.error("Ask command failed:", error);
+    return interaction.editReply({ content: "I couldn't look that up right now. Please try again in a moment." });
+  }
+}
+
+module.exports = { data, execute, findChannels };
