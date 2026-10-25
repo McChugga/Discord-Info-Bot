@@ -1,0 +1,97 @@
+const {
+  ActionRowBuilder,
+  EmbedBuilder,
+  SlashCommandBuilder,
+  StringSelectMenuBuilder
+} = require("discord.js");
+
+const sections = {
+  start: {
+    label: "Getting started",
+    description: "Guild Guide keeps server information and searchable knowledge in one place. Use the menu below to choose a topic.",
+    fields: [
+      { name: "/guildconfig view", value: "View the server description, welcome message, rules channel, and information channel." },
+      { name: "/ask question:<your question>", value: "Ask about the server and get matching saved information, recent messages, and channel links." },
+      { name: "/knowledge search", value: "Search saved server information and indexed messages." }
+    ]
+  },
+  asking: {
+    label: "Ask Guild Guide",
+    description: "Ask a server question in plain language. Guild Guide checks saved answers, recent indexed messages, server details, and channel names.",
+    fields: [
+      { name: "/ask question:<your question>", value: "Get matching information and links to relevant channels you can view. Replies are private to you." },
+      { name: "Live information", value: "New messages are searchable shortly after they're posted when an administrator enables message indexing." },
+      { name: "When no answer is found", value: "Try different keywords, browse the related channels, or ask a moderator to add a saved answer with `/knowledge add`." }
+    ]
+  },
+  knowledge: {
+    label: "Knowledge",
+    description: "Search and maintain this server's saved information.",
+    fields: [
+      { name: "/knowledge search query:<words>", value: "Search saved entries and messages you are allowed to view." },
+      { name: "/knowledge add title:<title> content:<text>", value: "Save a curated answer. Requires Manage Server." },
+      { name: "/knowledge remove title:<title>", value: "Remove a saved entry by its exact title. Requires Manage Server." },
+      { name: "/knowledge indexing action:<action>", value: "Enable, disable, check, or purge automatic message indexing. Requires Manage Server." }
+    ]
+  },
+  server: {
+    label: "Server setup",
+    description: "Configure the information Guild Guide shows for this server. Changes require Manage Server.",
+    fields: [
+      { name: "/guildconfig set-description", value: "Save a short server description." },
+      { name: "/guildconfig set-welcome", value: "Save welcome information for members." },
+      { name: "/guildconfig set-rules-channel", value: "Choose the rules text, announcement, or forum channel." },
+      { name: "/guildconfig set-info-channel", value: "Choose the server information text, announcement, or forum channel." }
+    ]
+  },
+  access: {
+    label: "Permissions and access",
+    description: "The bot can only index messages from channels Discord allows it to see.",
+    fields: [
+      { name: "Channel access", value: "Give the Guild Guide role View Channel in each category or channel it should read. Synced channels inherit category permissions." },
+      { name: "Message indexing", value: "Enable Message Content Intent in the Discord Developer Portal, then turn indexing on with `/knowledge indexing`. Indexing starts with new messages; older history is not imported." },
+      { name: "Search privacy", value: "Message search only returns results from channels the person searching can view. `/ask` replies privately." }
+    ]
+  }
+};
+
+const data = new SlashCommandBuilder()
+  .setName("help")
+  .setDescription("Open Guild Guide's interactive help menu.");
+
+function buildMenu() {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId("guildguide_help_section")
+      .setPlaceholder("Choose a help topic")
+      .addOptions(Object.entries(sections).map(([value, section]) => ({
+        label: section.label,
+        value,
+        description: section.description.slice(0, 100)
+      })))
+  );
+}
+
+function buildEmbed(key) {
+  const section = sections[key] || sections.start;
+  return new EmbedBuilder()
+    .setColor(0x21c7bd)
+    .setTitle(`Guild Guide Help • ${section.label}`)
+    .setDescription(section.description)
+    .addFields(section.fields)
+    .setFooter({ text: "Use the selector below to browse help topics." });
+}
+
+async function execute(interaction) {
+  return interaction.reply({ embeds: [buildEmbed("start")], components: [buildMenu()], ephemeral: true });
+}
+
+async function handleComponent(interaction) {
+  const section = interaction.values?.[0];
+  if (!sections[section]) {
+    return interaction.reply({ content: "That help topic is no longer available. Run `/help` again.", ephemeral: true });
+  }
+  return interaction.update({ embeds: [buildEmbed(section)], components: [buildMenu()] });
+}
+
+module.exports = { data, execute, handleComponent };
