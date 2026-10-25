@@ -14,7 +14,8 @@ const {
   ChannelSelectMenuBuilder,
   ChannelType,
   PermissionFlagsBits,
-  Events
+  Events,
+  Partials
 } = require("discord.js");
 
 const express = require("express");
@@ -102,7 +103,10 @@ const PORT = config.port;
 app.get("/", (req, res) => res.send("Guild Guide is running."));
 app.listen(PORT, "0.0.0.0", () => console.log(`Web server running on port ${PORT}`));
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+  partials: [Partials.Channel, Partials.Message]
+});
 const pendingContracts = new Map();
 const pendingGroupContracts = new Map();
 
@@ -514,6 +518,31 @@ client.once(Events.ClientReady, async () => {
   } catch (error) { console.error("Failed to register Guild Guide commands:", error); }
 });
 
+async function saveGuildMessage(message) {
+  try {
+    if (message.partial) message = await message.fetch();
+    if (!message.guildId || message.author?.bot || !message.content?.trim()) return;
+    await knowledgeService.captureMessage({
+      id: message.id,
+      guildId: message.guildId,
+      channelId: message.channelId,
+      authorId: message.author.id,
+      authorName: message.member?.displayName || message.author.username,
+      content: message.content,
+      createdAt: new Date(message.createdTimestamp)
+    });
+  } catch (error) {
+    console.error("Failed to index a Discord message:", error);
+  }
+}
+
+client.on(Events.MessageCreate, saveGuildMessage);
+client.on(Events.MessageUpdate, (_oldMessage, newMessage) => saveGuildMessage(newMessage));
+client.on(Events.MessageDelete, async message => {
+  try { await knowledgeService.removeIndexedMessage(message.id); }
+  catch (error) { console.error("Failed to remove a deleted Discord message from the index:", error); }
+});
+
 async function resolveGuildRole(guild, value) {
   const input = value.trim();
   if (!input) return null;
@@ -918,3 +947,4 @@ client.on(Events.InteractionCreate, async interaction => {
 initDatabase()
     .then(() => client.login(config.discordToken))
   .catch(error => { console.error("Database connection failed:", error); process.exit(1); });
+
