@@ -1,57 +1,56 @@
 # Guild Guide
 
-Guild Guide extends the supplied Contract Bot source with modular command loading and persistent, per-server knowledge. Existing contract creation, review, completion, payment confirmation, role/member settings, and channels remain in `bot/index.js`.
+Guild Guide helps server members find saved server information and searchable channel knowledge. It does not include contract-management commands or contract database tables.
 
-The Discord branding assets are `guild-guide-icon.png` (1024 × 1024 PNG) and `guild-guide-banner.png` (680 × 240 PNG).
+The branding assets are `guild-guide-icon.png` (1024 × 1024 PNG) and `guild-guide-banner.png` (680 × 240 PNG).
 
 ## Requirements
 
 - Node.js 18 or newer
 - PostgreSQL
-- A Discord application/bot with the `Guilds`, `Guild Messages`, and privileged `Message Content` intents enabled
+- A Discord application with the **Message Content Intent** enabled if you want automatic message indexing
 
 ## Setup
 
 1. Install dependencies with `npm install`.
 2. Create a PostgreSQL database.
-3. Set `DISCORD_TOKEN`, `DATABASE_URL`, and optionally `PORT` in your process environment or hosting provider settings. `.env.example` documents the variable names; this package does not load `.env` files automatically. Set `PGSSLMODE=require` when your database provider requires TLS.
-4. Apply schema migrations with `npm run migrate`. The bot also applies pending migrations during startup.
-5. Run the built-in checks with `npm test`.
-6. Start Guild Guide with `npm start`.
-7. In the Discord Developer Portal, open **Bot → Privileged Gateway Intents** and enable **Message Content Intent**. The bot uses it to read new messages for automatic indexing. It does not need Server Members or Presence intents.
-8. Invite the bot with the `bot` and `applications.commands` scopes. Give it **View Channel** in each channel it should index; retain **Send Messages** and **Embed Links** for contract features. For categories, grant the Guild Guide role **View Channel** in the category permissions and sync its child channels; add the role separately to any unsynced/private child channels. **Read Message History** is needed only if you later add importing of older messages. Run `/contractsetup` in your server to configure the existing contract channels and permission targets.
+3. Add `DISCORD_TOKEN` and `DATABASE_URL` to your hosting provider's environment variables. `PORT` is optional. Set `PGSSLMODE=require` when your database provider requires TLS. See `.env.example` for names and examples; local `.env` files are not loaded automatically.
+4. Run `npm run migrate` to prepare the database. Startup also applies any pending migrations.
+5. Run `npm test` for the built-in checks.
+6. Start the bot with `npm start`.
+7. In the Discord Developer Portal, enable **Message Content Intent** under **Bot → Privileged Gateway Intents** for message indexing. The bot does not need Server Members or Presence intents.
+8. Invite it with the `bot` and `applications.commands` scopes. Grant **View Channel** in each channel it should read. Enable **Read Message History** only if you later want to import older messages. It needs **Send Messages** and **Embed Links** to reply with help/knowledge results.
 
-Global Discord command updates can take time to appear. Startup registers the existing `/contract`, `/contractsetup`, and `/createcontractchannels` commands together with modular commands.
+Guild Guide registers its slash commands at startup. Discord may take a short time to display global command changes. Use `/help` in Discord to browse the available features.
 
-## Knowledge command
+## Commands
 
-- `/knowledge search query:<words>` searches entries saved for the current server.
-- `/knowledge add title:<title> content:<text>` creates or updates an entry. Requires Manage Server permission.
-- `/knowledge remove title:<title>` removes an entry by exact title. Requires Manage Server permission.
-- `/knowledge indexing action:Enable indexing` starts saving new messages the bot can read. Requires Manage Server permission.
-- `/knowledge indexing action:Disable indexing` stops saving new messages; already saved messages remain searchable.
-- `/knowledge indexing action:Check status` checks whether indexing is enabled.
-- `/knowledge indexing action:Delete indexed messages` disables indexing and deletes the server's automatically indexed messages.
-- `/knowledge search query:<words>` searches both curated entries and indexed messages. Message results are limited to channels the person searching can view.
-
-Curated entries and indexed messages are scoped by Discord server. Search replies are private to the caller. Automatic indexing starts when an administrator enables it and covers new and edited text messages the bot can see; it does not import old history. Deleted Discord messages are removed from the index when Discord sends the deletion event. Message text and author IDs/names are stored in PostgreSQL until purged. This is a searchable message archive, not an AI model; it does not summarize or infer answers.
-
-## Server information
-
-- `/guildconfig view` privately displays saved server information.
-- `/guildconfig set-description text:<text>` saves the server description.
+- `/help` opens an interactive menu for getting started, knowledge, server setup, and permissions.
+- `/ask question:<your question>` answers with matching saved information, recent indexed messages, and links to related channels the member can view. Replies are private to the caller.
+- `/knowledge search query:<words>` searches saved entries and indexed messages. Results only include channels the person searching can view.
+- `/knowledge add title:<title> content:<text>` creates or updates a curated entry. Requires Manage Server.
+- `/knowledge remove title:<title>` removes an entry by exact title. Requires Manage Server.
+- `/knowledge indexing action:<action>` enables, disables, checks, or deletes automatically indexed messages. Requires Manage Server.
+- `/guildconfig view` displays saved server information.
+- `/guildconfig set-description text:<text>` saves a server description.
 - `/guildconfig set-welcome text:<text>` saves welcome information.
 - `/guildconfig set-rules-channel channel:<channel>` saves the rules channel.
 - `/guildconfig set-info-channel channel:<channel>` saves the information channel.
 
-Both channel pickers accept text, announcement, and forum channels. All changes require Manage Server permission. Category headings are permission containers; select the channels inside them.
+Guild configuration changes and knowledge administration require Manage Server permission. Channel options support text, announcement, and forum channels; select channels inside a category. The bot must have View Channel permission in the selected/read channels.
 
-## Configuration and storage
+## Message indexing and privacy
 
-Environment parsing is centralized in `config/environment.js`, the shared PostgreSQL pool is in `database/pool.js`, and SQL migrations live in `database/migrations/`. `guild_config` stores server name, description, welcome text, and rules/info channel IDs for upcoming configuration commands. The existing contract settings tables remain managed by the original contract application code.
+An administrator must enable indexing with `/knowledge indexing`. From then on, Guild Guide saves new and edited text messages it can see; `/ask` can search these shortly after they are posted. It does not import older history. Deleted messages are removed from the index when Discord notifies the bot. Message text and author IDs/names are stored in PostgreSQL until an administrator purges indexed messages. Search replies are private to the person who ran the command and results are limited to channels they can view.
 
-Add slash commands as modules under `commands/` that export `data` and `execute`. Services and repositories separate command behavior from PostgreSQL queries.
+`/ask` retrieves matching saved text and current server/channel configuration. It does not use an AI model or invent answers; if it finds no match, it says so and suggests relevant channels when possible.
 
-## Hosting notes
+## Project structure
 
-Keep the process running as a worker/service. The built-in Express health endpoint listens on `PORT` and responds at `/`. Do not commit real bot tokens or database credentials.
+- `commands/` contains modular slash command files.
+- `services/` contains knowledge and server-configuration logic.
+- `database/pool.js` provides the shared PostgreSQL connection pool.
+- `database/migrations/` contains versioned database schema changes.
+- `bot/index.js` starts the Discord client, loads commands, handles interactions, and indexes new messages.
+
+Do not commit real Discord tokens or database credentials. The old contract tables, if present in a database from a previous bot version, are not used or modified by Guild Guide.
