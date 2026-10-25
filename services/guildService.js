@@ -1,7 +1,6 @@
-const pool = require("../database/pool");
-const { runMigrations } = require("../database/migrate");
+const repository = require("../database/repositories/guildRepository");
 
-runMigrations(pool).catch(error => {
-  console.error("Database migration failed:", error);
-  process.exitCode = 1;
-}).finally(() => pool.end());
+module.exports = {
+  getConfig: repository.getConfig,
+  updateConfig: repository.updateConfig
+};
