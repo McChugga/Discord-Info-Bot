@@ -947,4 +947,3 @@ client.on(Events.InteractionCreate, async interaction => {
 initDatabase()
     .then(() => client.login(config.discordToken))
   .catch(error => { console.error("Database connection failed:", error); process.exit(1); });
-
