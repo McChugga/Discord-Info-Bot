@@ -19,7 +19,7 @@ The Discord branding assets are `guild-guide-icon.png` (1024 × 1024 PNG) and `g
 5. Run the built-in checks with `npm test`.
 6. Start Guild Guide with `npm start`.
 7. In the Discord Developer Portal, open **Bot → Privileged Gateway Intents** and enable **Message Content Intent**. The bot uses it to read new messages for automatic indexing. It does not need Server Members or Presence intents.
-8. Invite the bot with the `bot` and `applications.commands` scopes. Give it **View Channel** in each channel it should index; retain **Send Messages** and **Embed Links** for contract features. **Read Message History** is needed only if you later add importing of older messages. Run `/contractsetup` in your server to configure the existing contract channels and permission targets.
+8. Invite the bot with the `bot` and `applications.commands` scopes. Give it **View Channel** in each channel it should index; retain **Send Messages** and **Embed Links** for contract features. For categories, grant the Guild Guide role **View Channel** in the category permissions and sync its child channels; add the role separately to any unsynced/private child channels. **Read Message History** is needed only if you later add importing of older messages. Run `/contractsetup` in your server to configure the existing contract channels and permission targets.
 
 Global Discord command updates can take time to appear. Startup registers the existing `/contract`, `/contractsetup`, and `/createcontractchannels` commands together with modular commands.
 
@@ -44,7 +44,7 @@ Curated entries and indexed messages are scoped by Discord server. Search replie
 - `/guildconfig set-rules-channel channel:<channel>` saves the rules channel.
 - `/guildconfig set-info-channel channel:<channel>` saves the information channel.
 
-All changes require Manage Server permission.
+Both channel pickers accept text, announcement, and forum channels. All changes require Manage Server permission. Category headings are permission containers; select the channels inside them.
 
 ## Configuration and storage
 
